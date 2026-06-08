@@ -1,4 +1,4 @@
-import Transferencia, {ITransferencia} from "../models/Transferencia"
+import Transferencia, {ITransferencia} from "../models/Transferencia.js"
 import ResponseType from "../types/response.type.js";
 import { Types, Document } from "mongoose";
 import { Request } from "express";
