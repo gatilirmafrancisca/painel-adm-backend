@@ -4,6 +4,7 @@ import dotenv from "dotenv"
 import database from "./database/configdb.js"
 import userRoute from "./routes/user.route.js";
 import gatoRoute from "./routes/gato.route.js";
+import financeiroRoute from "./routes/financeiro.route.js";
 import protectedRoute from "./routes/protected.route.js";
 import { errorHandler } from "./middlewares/errors.middleware.js";
 
@@ -23,6 +24,7 @@ app.use(cors());
 app.use("/", userRoute);
 app.use("/protected", protectedRoute);
 app.use("/gatos", gatoRoute);
+app.use("/financeiro", financeiroRoute);
 
 app.get("/", (req: Request, res: Response) => {
   res.send({ message: "App Working" });
