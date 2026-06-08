@@ -1,56 +1,63 @@
 import { Request, Response, NextFunction } from "express";
-import { IGato } from "../models/Gato.js";
-import * as gatoService from "../services/gato.service.js"
+import { ITransferencia } from "../models/Transferencia.js";
+import * as financeiroService from "../services/financeiro.service.js"
 
-
-export const criarGato = async(req: Request<any, any, IGato> , res: Response, next: NextFunction) => {
+export const criarTransferencia = async(req: Request<any, any, ITransferencia> , res: Response, next: NextFunction) => {
 
     try {
-
-        if(!req.user){
+        
+        if(!req.user) {
             return res.status(401).json( {message: "Unathorized."} );
         }
 
-        const resposta = await gatoService.criarGatoService(req.body, req);
+        const resposta = await financeiroService.criarTransferenciaService(req.body, req);
         return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
-
-    } catch (error) {
-        next(error);
     }
+    catch (error) {
+
+        next(error);
+        
+    }
+}
+
+export const listarTransferencias = async(req: Request, res: Response, next: NextFunction) => {
     
-}
-
-export const listarGatos = async(req: Request, res: Response, next: NextFunction) => {
     try {
-        const resposta = await gatoService.listarGatosService({query: req.query});
+
+        const resposta = await financeiroService.listarTransferenciaService({query: req.query});
         return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
+
     } catch (error) {
+
         next(error);
     }
 }
 
-export const patchGato = async (req: Request<{ id: string }, any, Partial<IGato>>, res: Response, next: NextFunction) => {
+export const patchTransferencia = async (req: Request<{ id: string }, any, Partial<ITransferencia>>, res: Response, next: NextFunction) => {
     try {
         if (!req.user) {
             return res.status(401).json({ message: "Unathorized." });
         }
 
         const { id } = req.params;
-        const resposta = await gatoService.patchGatoService(id, req.body, req);
+        const resposta = await financeiroService.patchTransferenciaService(id, req.body, req);
         return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
+
     } catch (error) {
+
         next(error);
+
     }
 };
 
-export const deletarGato = async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export const deletarTransferencia = async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     try {
         if (!req.user) {
             return res.status(401).json({ message: "Unathorized." });
         }
 
         const { id } = req.params;
-        const resposta = await gatoService.deletarGatoService(id);
+        const resposta = await financeiroService.deletarTransferenciaService(id);
         return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
     } catch (error) {
         next(error);

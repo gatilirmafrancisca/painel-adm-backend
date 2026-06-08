@@ -63,11 +63,16 @@ export const registerService = async (data: IUser): Promise<ResponseType> => {
         }
 
         // Validação email existente
-        const existingUser = await locateUserByEmail(data.email) || await locateUserByLogin(data.login);
-        if (existingUser) {
-            return { status: 409, message: "Email/Usuário já existe." };
+        const existingEmail = await locateUserByEmail(data.email);
+        if (existingEmail) {
+            return { status: 409, message: "Email já está cadastrado!" };
         }
         
+        const existingUser =  await locateUserByLogin(data.login);
+        if (existingUser) {
+            return {status : 409, message: "Escolha outro nome de usuário!"}
+        }
+
         const validEmail = isValidEmail(data.email);
         if (!validEmail) {
             return { status: 400, message: "Email no formato inválido" };
