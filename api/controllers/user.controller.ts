@@ -5,14 +5,14 @@ import { IUser } from "../models/User.js";
 
 export const registerController = async (req: Request<any, any, IUser>, res: Response) => {
 
-    const user = await registerService(req.body);
-    return res.status(user.status).json({ message: user.message, user: user.data });
+    const resposta = await registerService(req.body);
+    return res.status(resposta.status).json({ message: resposta.message, user: resposta.data });
     
 };
 
 export const loginController = async (req: Request<any, any, IUser>, res: Response) => {
     
-    const user = await loginService(req.body);
-    return res.status(user.status).json({ message: user.message, user: user.data });
+    const resposta = await loginService(req.body);
+    return res.status(resposta.status).json({ message: resposta.message, user: resposta.data });
     
 };

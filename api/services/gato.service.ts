@@ -89,7 +89,7 @@ export const listarGatosService = async (req: any): Promise<ResponseType> => {
         return { status: 404, message: "Nenhum gato encontrado." };
       }
 
-      return { status: 200, message: "Gatos listados com sucesso.", data: gatos };
+      return { status: 200, message: "Gatos:", data: gatos };
 
     } catch (error: any) {
 
