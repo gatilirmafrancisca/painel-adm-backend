@@ -11,8 +11,8 @@ export const criarGato = async(req: Request<any, any, IGato> , res: Response, ne
             return res.status(401).json( {message: "Unathorized."} );
         }
 
-        const gato = await gatoService.criarGatoService(req.body, req);
-        return res.status(gato.status).json({ message: gato.message, data: gato.data });
+        const resposta = await gatoService.criarGatoService(req.body, req);
+        return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
 
     } catch (error) {
         next(error);
@@ -22,8 +22,8 @@ export const criarGato = async(req: Request<any, any, IGato> , res: Response, ne
 
 export const listarGatos = async(req: Request, res: Response, next: NextFunction) => {
     try {
-        const gatos = await gatoService.listarGatosService({query: req.query});
-        return res.status(gatos.status).json({ message: gatos.message, data: gatos.data });
+        const resposta = await gatoService.listarGatosService({query: req.query});
+        return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
     } catch (error) {
         next(error);
     }
@@ -36,8 +36,8 @@ export const patchGato = async (req: Request<{ id: string }, any, Partial<IGato>
         }
 
         const { id } = req.params;
-        const gato = await gatoService.patchGatoService(id, req.body, req);
-        return res.status(gato.status).json({ message: gato.message, data: gato.data });
+        const resposta = await gatoService.patchGatoService(id, req.body, req);
+        return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
     } catch (error) {
         next(error);
     }

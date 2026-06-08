@@ -178,16 +178,11 @@ export const validarParametros = async (data: ITransferencia): Promise<any> => {
 
 const ALLOWED_PATCH_FIELDS = new Set([
     "valor",
-    "tipo",
     "metodoPagamento",
     "status",
-    "origem",
-    "gatoId",
     "nomeDoador",
     "emailDoador",
     "descricao",
-    "mercadoPagoId",
-    "data",
     "dataConfirmacao"
 ]);
 
@@ -209,10 +204,6 @@ export const validatePatchParams = async (data: Partial<ITransferencia>): Promis
         payload.valor = validateNumberField(payload.valor, "valor");
     }
 
-    if (hasOwnField(payload, "data")) {
-        payload.data = validateDateField(payload.data, "data");
-    }
-
     if (hasOwnField(payload, "dataConfirmacao") && !isEmptyValue(payload.dataConfirmacao)) {
         payload.dataConfirmacao = validateDateField(payload.dataConfirmacao, "dataConfirmacao");
     }
@@ -229,30 +220,12 @@ export const validatePatchParams = async (data: Partial<ITransferencia>): Promis
         payload.descricao = validateStringField(payload.descricao, "descricao");
     }
 
-    if (hasOwnField(payload, "mercadoPagoId") && !isEmptyValue(payload.mercadoPagoId)) {
-        payload.mercadoPagoId = validateStringField(payload.mercadoPagoId, "mercadoPagoId");
-    }
-
-    if (hasOwnField(payload, "gatoId") && !isEmptyValue(payload.gatoId)) {
-        if (!Types.ObjectId.isValid(String(payload.gatoId))) {
-            throw new MissingParamsError("O campo 'gatoId' deve ser um ID de MongoDB válido.");
-        }
-    }
-
-    if (hasOwnField(payload, "tipo")) {
-        payload.tipo = validateEnumField(payload.tipo, "Tipo", FinanceTypes.TIPOMOVIMENTACAOTYPE);
-    }
-
     if (hasOwnField(payload, "metodoPagamento")) {
         payload.metodoPagamento = validateEnumField(payload.metodoPagamento, "Método de Pagamento", FinanceTypes.METODOPAGAMENTOTYPE);
     }
 
     if (hasOwnField(payload, "status")) {
         payload.status = validateEnumField(payload.status, "Status", FinanceTypes.STATUSFINANCEIROTYPE);
-    }
-
-    if (hasOwnField(payload, "origem")) {
-        payload.origem = validateEnumField(payload.origem, "Origem", FinanceTypes.ORIGEMFINANCEIRATYPE);
     }
 
     return payload as Partial<ITransferencia>;

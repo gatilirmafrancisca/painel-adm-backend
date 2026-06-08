@@ -6,5 +6,7 @@ const router = Router();
 
 router.post("/manual", verifyJWT, financeiroController.criarTransferencia);
 router.get("/transferencias", verifyJWT, financeiroController.listarTransferencias);
+router.patch("/:id", verifyJWT, financeiroController.patchTransferencia);
+router.delete("/:id", verifyJWT, financeiroController.deletarTransferencia);
 
 export default router;
