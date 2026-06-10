@@ -84,7 +84,7 @@ export const criarGatoService = async (data: IGato, req: Request) : Promise<Resp
         const gatoNovo = new Gato(dadosGato);
         await gatoNovo.save();
 
-        return {status: 201, message: "Gato cadastrado com sucesso.", data: { nome: gatoNovo.nome, id: gatoNovo._id }}
+        return {status: 201, message: "Gato cadastrado com sucesso.", data: gatoNovo};
 
     }catch(error: any) {
 
