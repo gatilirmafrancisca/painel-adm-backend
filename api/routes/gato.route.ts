@@ -5,9 +5,9 @@ import { upload } from '../database/configupload.js';
 
 const router = Router();
 
-router.post("/", verifyJWT, upload.single("imagem"), gatoController.criarGato);
+router.post("/", verifyJWT, upload.array('imagens', 10), gatoController.criarGato);
 router.get("/", gatoController.listarGatos);
-router.patch("/:id", verifyJWT, upload.single("imagem"), gatoController.patchGato);
+router.patch("/:id", verifyJWT, upload.array('imagens', 10), gatoController.patchGato);
 router.delete("/:id", verifyJWT, gatoController.deletarGato);
 
 export default router;

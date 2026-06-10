@@ -14,7 +14,7 @@ export interface IGato {
     necessidadesEspeciais: boolean;
     descricaoBio: String;
     status: EnumGatos.StatusType;
-    imagemUrl: String;
+    imagemUrl: String[];
 }
 
 const GatoSchema: Schema<IGato> = new mongoose.Schema({
@@ -34,7 +34,7 @@ const GatoSchema: Schema<IGato> = new mongoose.Schema({
     necessidadesEspeciais: { type: Boolean, required: true },
     descricaoBio: { type: String, required: true },
     status: { type: String, enum: EnumGatos.STATUSTYPES, required: true },
-    imagemUrl: { type: String, required: true }
+    imagemUrl: { type: [String], required: true }
     
 }, {timestamps : true});
 
