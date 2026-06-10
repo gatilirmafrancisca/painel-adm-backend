@@ -19,5 +19,8 @@ cloudinary.config({
 
 // Usando MemoryStorage em vez de DiskStorage por causa do Vercel
 const storage = multer.memoryStorage();
-export const upload = multer({ storage });
+export const upload = multer(
+  { storage, 
+    limits: { fileSize: 6 * 1024 * 1024 }, // Limite de 6MB por arquivo
+    });
 export { cloudinary };

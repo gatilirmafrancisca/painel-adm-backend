@@ -22,10 +22,10 @@ const localizarGato = async(id?: string, filters: any = {}) : Promise<(IGato & D
 }
 
 
-const uploadFromBuffer = (reqFile: Express.Multer.File): Promise<any> => {
+const uploadFromBuffer = (reqFile: Express.Multer.File, id: string): Promise<any> => {
     return new Promise((resolve, reject) => {
         const cld_upload_stream = cloudinary.uploader.upload_stream(
-          { folder: 'gatil_images' },
+          { folder: `gatil_images/gatos/${id}` },
           (error: any, result: any) => {
             if (result) {
               resolve(result);
@@ -39,12 +39,25 @@ const uploadFromBuffer = (reqFile: Express.Multer.File): Promise<any> => {
 };
 
 
+const uploadMultipleFiles = async (files: Express.Multer.File[], id: string): Promise<string[]> => {
+    // Cria um array de promessas de upload
+    const uploadPromises = files.map(file => uploadFromBuffer(file, id));
+    // Aguarda todas subirem ao mesmo tempo (muito mais rápido que um for loop)
+    const results = await Promise.all(uploadPromises);
+    // Retorna apenas as URLs geradas
+    return results.map(result => result.secure_url);
+};
+
+
 export const criarGatoService = async (data: IGato, req: Request) : Promise<ResponseType> => {
     try {
 
-        const file = req.file;
+        const files = req.files as Express.Multer.File[];
 
-        if (!file) {return {status: 400, message: "A imagem é obrigatória."};}
+        if (!files || files.length === 0) {return {status: 400, message: "Pelo menos uma imagem é obrigatória."};}
+        if (files.length > 10) {
+            return { status: 400, message: "É permitido enviar no máximo 10 imagens por gato." };
+        }
 
         const dadosNormalizados = normalizarDadosGato(data);
 
@@ -55,12 +68,15 @@ export const criarGatoService = async (data: IGato, req: Request) : Promise<Resp
         } as IGato);
 
         const personalidades = normalizarPersonalidades(dadosNormalizados.personalidade);
-        const result = await uploadFromBuffer(file);
+
+        const id = new Types.ObjectId();
+        const result = await uploadMultipleFiles(files, id.toString());
 
         const dadosGato = new Gato({
+            _id: id,
           ...data,
           ...dadosNormalizados,
-          imagemUrl: result.secure_url,
+          imagemUrl: result,
           personalidade: personalidades
         });
 
@@ -107,10 +123,10 @@ export const patchGatoService = async (id: string, data: Partial<IGato>, req: Re
             return { status: 404, message: "Gato não encontrado." };
         }
 
-        const file = req.file;
+        const files = req.files as Express.Multer.File[];
         const hasBodyData = !!data && Object.keys(data).length > 0;
 
-        if (!hasBodyData && !file) {
+        if (!hasBodyData && (!files || files.length === 0)) {
             return { status: 400, message: "Nenhum dado fornecido para atualização." };
         }
 
@@ -119,13 +135,13 @@ export const patchGatoService = async (id: string, data: Partial<IGato>, req: Re
             ? await validatePatchParams(dadosNormalizados)
             : {} as Partial<IGato>;
 
-        if (file) {
-            if (!file.buffer || file.buffer.length === 0) {
-                return { status: 400, message: "A imagem enviada está vazia." };
+        if (files && files.length > 0) {
+            if (files.length > 10) {
+                return { status: 400, message: "É permitido enviar no máximo 10 imagens." };
             }
 
-            const uploadResult = await uploadFromBuffer(file);
-            validData.imagemUrl = uploadResult.secure_url;
+            const uploadResult = await uploadMultipleFiles(files, id);
+            validData.imagemUrl = uploadResult as any;
         }
 
         Object.assign(gato[0], validData);
