@@ -162,6 +162,16 @@ export const deletarGatoService = async(id: string) : Promise<ResponseType> => {
             return {status: 404, message: "Gato não encontrado."};
         }
 
+        const folderPath = `gatos/${id}`;
+
+        try {
+            await cloudinary.api.delete_resources_by_prefix(folderPath);
+            await cloudinary.api.delete_folder(folderPath);
+            
+        } catch (error) {
+            console.error("Erro ao excluir recursos da Cloudinary:", error);
+        }
+
         await gato[0].deleteOne()
 
         return {status: 200, message: "Gato deletado com sucesso."};
