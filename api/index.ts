@@ -21,8 +21,8 @@ app.use(cors());
 
 /** routes **/ 
 
-app.use("/", userRoute);
 app.use("/protected", protectedRoute);
+app.use("/auth", userRoute);
 app.use("/gatos", gatoRoute);
 app.use("/financeiro", financeiroRoute);
 
