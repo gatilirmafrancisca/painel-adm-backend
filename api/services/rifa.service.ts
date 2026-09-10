@@ -101,7 +101,7 @@ export const criarRifaManualService = async (
         const rifa = await getRifaModel().create({
  
             paymentId: `MANUAL-${numeroFormatado}`,
-            status: "confirmado",
+            status: "APROVADO",
             amount: 100,
             name: nome,
             phone: telefone,
