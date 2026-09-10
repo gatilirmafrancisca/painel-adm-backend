@@ -6,6 +6,7 @@ import userRoute from "./routes/user.route.js";
 import gatoRoute from "./routes/gato.route.js";
 import financeiroRoute from "./routes/financeiro.route.js";
 import protectedRoute from "./routes/protected.route.js";
+import rifaRoute from "./routes/rifa.route.js";
 import { errorHandler } from "./middlewares/errors.middleware.js";
 
 dotenv.config();
@@ -17,7 +18,9 @@ const app = express();
 database.connect();
 
 app.use(express.json());
-app.use(cors());
+app.use(cors(
+  { origin: process.env.FRONTEND_URL, credentials: true }
+));
 
 /** routes **/ 
 
@@ -25,6 +28,7 @@ app.use("/protected", protectedRoute);
 app.use("/auth", userRoute);
 app.use("/gatos", gatoRoute);
 app.use("/financeiro", financeiroRoute);
+app.use("/rifa", rifaRoute);
 
 app.get("/", (req: Request, res: Response) => {
   res.send({ message: "App Working" });
