@@ -30,6 +30,13 @@ export const criarTransferenciaService = async (data: ITransferencia, req: Reque
         const dadosTransferencia = new Transferencia(dadosNormalizados);
         await dadosTransferencia.save();
 
+        console.log("[financeiro] transferência salva com sucesso:", {
+        id: dadosTransferencia._id,
+        mercadoPagoId: dadosTransferencia.mercadoPagoId ?? "N/A",
+        valor: dadosTransferencia.valor,
+        status: dadosTransferencia.status,
+        });
+
         return {status: 201, message: "Transferência cadastrada.", data: {id: dadosTransferencia._id }}
 
     } catch (error: any) {

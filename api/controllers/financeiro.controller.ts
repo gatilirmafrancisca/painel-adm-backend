@@ -20,6 +20,15 @@ export const criarTransferencia = async(req: Request<any, any, ITransferencia> ,
     }
 }
 
+export const sincronizarMercadoPago = async(req: Request<any, any, ITransferencia>, res: Response, next: NextFunction) => {
+    try {
+        const resposta = await financeiroService.criarTransferenciaService(req.body, req);
+        return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
+    } catch (error) {
+        next(error);
+    }
+};
+
 export const listarTransferencias = async(req: Request, res: Response, next: NextFunction) => {
     
     try {

@@ -93,6 +93,12 @@ export const normalizarDadosTransferencia = (data: Partial<ITransferencia> & Rec
             : rawData.dataConfirmacao;
     }
 
+    for (const field of ["utmSource", "utmMedium", "utmCampaign"] as const) {
+        if (isEmptyValue(rawData[field])) {
+            normalizedData[field] = undefined;
+        }
+    }
+
     return normalizedData;
 };
 
@@ -113,8 +119,16 @@ export const montarFiltrosTransferencia = (query: any): Record<string, any> => {
         filters.metodoPagamento = query.metodoPagamento;
     }
 
-    if (query.origem && FinanceTypes.ORIGEMFINANCEIRATYPE.includes(query.origem as FinanceTypes.OrigemFinanceiraType)) {
-        filters.origem = query.origem;
+    if (query.utmSource && FinanceTypes.UTMSOURCETYPE.includes(query.utmSource as FinanceTypes.UtmSourceType)) {
+        filters.utmSource = query.utmSource;
+    }
+
+    if (query.utmMedium && FinanceTypes.UTMEDIUMTYPE.includes(query.utmMedium as FinanceTypes.UtmMediumType)) {
+        filters.utmMedium = query.utmMedium;
+    }
+
+    if (query.utmCampaign && FinanceTypes.UTCAMPAIGNTYPE.includes(query.utmCampaign as FinanceTypes.UtmCampaignType)) {
+        filters.utmCampaign = query.utmCampaign;
     }
 
     if (query.nomeDoador) {
@@ -148,7 +162,6 @@ export const validarParametros = async (data: ITransferencia): Promise<any> => {
     if (!String(data.tipo || "").trim()) camposAusentes.push("Tipo");
     if (!String(data.metodoPagamento || "").trim()) camposAusentes.push("Método de Pagamento");
     if (!String(data.status || "").trim()) camposAusentes.push("Status");
-    if (!String(data.origem || "").trim()) camposAusentes.push("Origem");
     if (!String(data.nomeDoador || "").trim()) camposAusentes.push("Nome do Doador");
     if (isEmptyValue(data.dataConfirmacao)) camposAusentes.push("Data");
 
@@ -164,7 +177,15 @@ export const validarParametros = async (data: ITransferencia): Promise<any> => {
     validateEnumField(data.tipo, "Tipo", FinanceTypes.TIPOMOVIMENTACAOTYPE);
     validateEnumField(data.metodoPagamento, "Método de Pagamento", FinanceTypes.METODOPAGAMENTOTYPE);
     validateEnumField(data.status, "Status", FinanceTypes.STATUSFINANCEIROTYPE);
-    validateEnumField(data.origem, "Origem", FinanceTypes.ORIGEMFINANCEIRATYPE);
+    if (!isEmptyValue(data.utmSource)) {
+        validateEnumField(data.utmSource, "UtmSource", FinanceTypes.UTMSOURCETYPE);
+    }
+    if (!isEmptyValue(data.utmMedium)) {
+        validateEnumField(data.utmMedium, "UtmMedium", FinanceTypes.UTMEDIUMTYPE);
+    }
+    if (!isEmptyValue(data.utmCampaign)) {
+        validateEnumField(data.utmCampaign, "UtmCampaign", FinanceTypes.UTCAMPAIGNTYPE);
+    }
 
     // Validações opcionais (apenas se preenchidos)
     if (!isEmptyValue(data.gatoId) && !Types.ObjectId.isValid(String(data.gatoId))) {

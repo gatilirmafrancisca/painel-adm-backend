@@ -7,7 +7,9 @@ export interface ITransferencia extends Document {
     tipo: FinanceTypes.TipoMovimentacaoType;
     metodoPagamento: FinanceTypes.MetodoPagamentoType;
     status: FinanceTypes.StatusFinanceiroType;
-    origem: FinanceTypes.OrigemFinanceiraType;
+    utmSource?: FinanceTypes.UtmSourceType;
+    utmMedium?: FinanceTypes.UtmMediumType;
+    utmCampaign?: FinanceTypes.UtmCampaignType;
     gatoId?: mongoose.Types.ObjectId;
     nomeDoador: string;
     emailDoador?: string;
@@ -27,8 +29,11 @@ const TransferenciaSchema: Schema<ITransferencia> = new mongoose.Schema({
     tipo : { type: String, enum: FinanceTypes.TIPOMOVIMENTACAOTYPE, required: true},
     metodoPagamento : { type: String, enum: FinanceTypes.METODOPAGAMENTOTYPE, required: true},
     status: { type: String, enum: FinanceTypes.STATUSFINANCEIROTYPE, required: true },
-    origem: { type: String, enum: FinanceTypes.ORIGEMFINANCEIRATYPE, required: true },
-  
+
+    utmSource: { type: String, enum: FinanceTypes.UTMSOURCETYPE, required: false },
+    utmMedium: { type: String, enum: FinanceTypes.UTMEDIUMTYPE, required: false },
+    utmCampaign: { type: String, enum: FinanceTypes.UTCAMPAIGNTYPE, required: false },
+
     // Vínculo opcional com um gato do abrigo
     gatoId: { type: Schema.Types.ObjectId, ref: 'Gato', required: false },
   
