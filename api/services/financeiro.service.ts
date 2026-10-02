@@ -27,6 +27,30 @@ export const criarTransferenciaService = async (data: ITransferencia, req: Reque
         const dadosNormalizados = normalizarDadosTransferencia(data);
         await validarParametros(dadosNormalizados as ITransferencia);
 
+        const mercadoPagoId = dadosNormalizados.mercadoPagoId;
+        const transferenciaExistente = mercadoPagoId
+            ? await Transferencia.findOne({ mercadoPagoId })
+            : null;
+
+        if (transferenciaExistente) {
+            if (transferenciaExistente.status !== "APROVADO" || dadosNormalizados.status === "APROVADO") {
+                Object.assign(transferenciaExistente, dadosNormalizados);
+            } else {
+                Object.assign(transferenciaExistente, { ...dadosNormalizados, status: transferenciaExistente.status });
+            }
+
+            await transferenciaExistente.save();
+
+            console.log("[financeiro] transferência sincronizada:", {
+                id: transferenciaExistente._id,
+                mercadoPagoId: transferenciaExistente.mercadoPagoId ?? "N/A",
+                valor: transferenciaExistente.valor,
+                status: transferenciaExistente.status,
+            });
+
+            return { status: 200, message: "Transferência já cadastrada e atualizada.", data: { id: transferenciaExistente._id } };
+        }
+
         const dadosTransferencia = new Transferencia(dadosNormalizados);
         await dadosTransferencia.save();
 
