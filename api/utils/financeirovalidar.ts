@@ -102,6 +102,8 @@ export const normalizarDadosTransferencia = (data: Partial<ITransferencia> & Rec
     return normalizedData;
 };
 
+export const CATEGORIA_DOACAO = "DOACAO";
+
 export const montarFiltrosTransferencia = (query: any): Record<string, any> => {
     const filters: Record<string, any> = {};
 
@@ -135,18 +137,26 @@ export const montarFiltrosTransferencia = (query: any): Record<string, any> => {
         filters.nomeDoador = { $regex: String(query.nomeDoador).trim(), $options: "i" };
     }
 
+    // Convertido para ObjectId para funcionar também no aggregate (que não faz cast)
     if (query.gatoId && Types.ObjectId.isValid(query.gatoId)) {
-        filters.gatoId = query.gatoId;
+        filters.gatoId = new Types.ObjectId(String(query.gatoId));
     }
 
-    // Filtro de data exata ou range (ex: ano e mês via query)
+    // Categoria DOACAO: só entradas que não vieram da rifa solidária.
+    // Sobrescreve 'tipo' e 'utmCampaign' para nunca misturar outros valores no resultado.
+    if (query.categoria === CATEGORIA_DOACAO) {
+        filters.tipo = "ENTRADA" satisfies FinanceTypes.TipoMovimentacaoType;
+        filters.utmCampaign = { $ne: "RIFA_SOLIDARIA" satisfies FinanceTypes.UtmCampaignType };
+    }
+
+    // Filtro por mês (ex: ?mes=10&ano=2026), no fuso de Brasília (UTC-3, sem horário de verão)
     if (query.mes && query.ano) {
         const mes = Number(query.mes);
         const ano = Number(query.ano);
-        if (!Number.isNaN(mes) && !Number.isNaN(ano)) {
-            filters.data = {
-                $gte: new Date(ano, mes - 1, 1),
-                $lte: new Date(ano, mes, 0, 23, 59, 59, 999)
+        if (Number.isInteger(mes) && Number.isInteger(ano) && mes >= 1 && mes <= 12) {
+            filters.dataConfirmacao = {
+                $gte: new Date(Date.UTC(ano, mes - 1, 1, 3)),
+                $lt: new Date(Date.UTC(ano, mes, 1, 3))
             };
         }
     }

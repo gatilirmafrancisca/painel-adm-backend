@@ -6,6 +6,7 @@ import * as financeiroController from "../controllers/financeiro.controller.js"
 const router = Router();
 
 router.post("/interno/mercadopago", internalSecret, financeiroController.sincronizarMercadoPago);
+router.get("/interno/transferencias", internalSecret, financeiroController.listarTransferencias);
 router.post("/manual", verifyJWT, financeiroController.criarTransferencia);
 router.get("/transferencias", verifyJWT, financeiroController.listarTransferencias);
 router.patch("/:id", verifyJWT, financeiroController.patchTransferencia);
