@@ -12,6 +12,17 @@ export const listarRifasAdminController = async(_req:Request , res: Response, ne
 
 }
 
+export const resumoRifasAdminController = async(_req: Request, res: Response, next: NextFunction) => {
+
+    try {
+
+        const resposta = await rifaService.resumoRifasAdminService();
+        return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
+
+    } catch (error) {next(error);}
+
+}
+
 export const criarRifaManualController = async(
     req:Request<any, any, rifaService.CadastroManualInput>, 
     res: Response, 
