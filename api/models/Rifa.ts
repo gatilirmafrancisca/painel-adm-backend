@@ -14,6 +14,13 @@ export interface IRifa {
     email: string | null;
 
     claimedNumber: number | null;
+
+    // Gravados pelo backend da rifa (gatil-mercadopago-backend):
+    // início do prazo de escolha do número, lembretes já enviados e o
+    // Pix de teste de R$ 0,01 (só existe quando true).
+    aprovadoEm?: Date | null;
+    lembretesEnviados?: number[];
+    teste?: boolean;
 }
 
 const RifaSchema: Schema<IRifa> = new mongoose.Schema({
@@ -26,8 +33,16 @@ const RifaSchema: Schema<IRifa> = new mongoose.Schema({
     email: { type: String, default: null },
 
     claimedNumber: { type: Number, default: null },
+
+    aprovadoEm: { type: Date, default: null },
+    lembretesEnviados: { type: [Number], default: undefined },
+    // Sem default: o índice único do número no backend da rifa conta com
+    // registros reais sem esse campo.
+    teste: { type: Boolean },
 });
 
+// Só documentação: a conexão usa autoIndex: false (database/rifadb.ts), e
+// quem cria/troca os índices é o backend da rifa (npm run migrate:indices).
 RifaSchema.index(
     { claimedNumber: 1 },
     { unique: true, partialFilterExpression: { claimedNumber: { $type: "number" } } }

@@ -66,8 +66,9 @@ function validarNumero(value: unknown): number {
 
 export const listarRifasAdminService = async (): Promise<ResponseType> => {
     try {
+        // Números de Pix de teste (R$ 0,01) não são vendas.
         const rifas = await getRifaModel()
-            .find({ claimedNumber: { $ne: null } })
+            .find({ claimedNumber: { $ne: null }, teste: { $ne: true } })
             .select("name phone email claimedNumber status paymentId")
             .sort({ claimedNumber: 1 })
             .lean();
@@ -75,6 +76,117 @@ export const listarRifasAdminService = async (): Promise<ResponseType> => {
         return { status: 200, message: "Rifas encontradas.", data: rifas };
     } catch (error: any) {
         console.error("listarRifasAdminService error:", error);
+        throw error;
+    }
+};
+
+/** Mesmo prazo do backend da rifa (lembretes.service.ts). */
+const PRAZO_ESCOLHA_DIAS = 20;
+const DIA_MS = 24 * 60 * 60_000;
+
+interface ItemResumo {
+    paymentId: string;
+    email: string | null;
+    aprovadoEm?: Date | null;
+    _id: Types.ObjectId;
+}
+
+export interface PendenteEscolha {
+    paymentId: string;
+    email: string | null;
+    /** Data da aprovação (ou do registro, para os antigos sem aprovadoEm). */
+    pagoEm: string;
+    /** Dias até o número ser sorteado; 0 = sorteio na próxima execução. */
+    diasRestantes: number;
+}
+
+export interface Reserva {
+    paymentId: string;
+    email: string | null;
+    /** Quando o Pix foi gerado (data de criação do registro). */
+    criadoEm: string;
+}
+
+export interface ResumoRifas {
+    total: number;
+    compradas: number;
+    pendentesEscolha: number;
+    reservadas: number;
+    disponiveis: number;
+    listas: { pendentesEscolha: PendenteEscolha[]; reservadas: Reserva[] };
+}
+
+/**
+ * Situação das vagas da rifa, na mesma conta que o site usa para bloquear a
+ * venda (haNumerosDisponiveis no backend da rifa):
+ * - compradas: APROVADO com número (site + cadastro manual);
+ * - pendentesEscolha: APROVADO, pagou e ainda não escolheu o número;
+ * - reservadas: PENDENTE, Pix gerado e ainda não pago — ocupa vaga até vencer;
+ * - disponiveis: o resto. CANCELADO e Pix de teste ficam de fora.
+ */
+export const resumoRifasAdminService = async (): Promise<ResponseType> => {
+    try {
+        const campos = { paymentId: 1, email: 1, aprovadoEm: 1 };
+        const [resultado] = await getRifaModel().aggregate<{
+            compradas: { n: number }[];
+            pendentesEscolha: ItemResumo[];
+            reservadas: ItemResumo[];
+        }>([
+            { $match: { teste: { $ne: true }, status: { $ne: "CANCELADO" } } },
+            { $sort: { _id: 1 } },
+            {
+                $facet: {
+                    compradas: [
+                        { $match: { status: "APROVADO", claimedNumber: { $type: "number" } } },
+                        { $count: "n" },
+                    ],
+                    pendentesEscolha: [
+                        { $match: { status: "APROVADO", claimedNumber: null } },
+                        { $project: campos },
+                    ],
+                    reservadas: [
+                        { $match: { status: "PENDENTE" } },
+                        { $project: campos },
+                    ],
+                },
+            },
+        ]);
+
+        const agora = Date.now();
+        const pendentesEscolha: PendenteEscolha[] = (resultado?.pendentesEscolha ?? [])
+            .map((item) => {
+                const pagoEm = item.aprovadoEm ? new Date(item.aprovadoEm) : item._id.getTimestamp();
+                const prazo = pagoEm.getTime() + PRAZO_ESCOLHA_DIAS * DIA_MS;
+                return {
+                    paymentId: item.paymentId,
+                    email: item.email ?? null,
+                    pagoEm: pagoEm.toISOString(),
+                    diasRestantes: Math.max(0, Math.ceil((prazo - agora) / DIA_MS)),
+                };
+            })
+            .sort((a, b) => a.pagoEm.localeCompare(b.pagoEm));
+
+        const reservadas: Reserva[] = (resultado?.reservadas ?? []).map((item) => ({
+            paymentId: item.paymentId,
+            email: item.email ?? null,
+            criadoEm: item._id.getTimestamp().toISOString(),
+        }));
+
+        const compradas = resultado?.compradas[0]?.n ?? 0;
+        const ocupadas = compradas + pendentesEscolha.length + reservadas.length;
+
+        const resumo: ResumoRifas = {
+            total: TOTAL_NUMEROS,
+            compradas,
+            pendentesEscolha: pendentesEscolha.length,
+            reservadas: reservadas.length,
+            disponiveis: Math.max(0, TOTAL_NUMEROS - ocupadas),
+            listas: { pendentesEscolha, reservadas },
+        };
+
+        return { status: 200, message: "Resumo da rifa.", data: resumo };
+    } catch (error: any) {
+        console.error("resumoRifasAdminService error:", error);
         throw error;
     }
 };
