@@ -21,6 +21,10 @@ export interface IRifa {
     aprovadoEm?: Date | null;
     lembretesEnviados?: number[];
     teste?: boolean;
+    // Contato de quem pagou (nome no Pix ou titular do cartão) e meio de
+    // pagamento (pix, cartao...), também gravados pelo backend da rifa.
+    nomePagador?: string | null;
+    metodoPagamento?: string | null;
 }
 
 const RifaSchema: Schema<IRifa> = new mongoose.Schema({
@@ -39,6 +43,8 @@ const RifaSchema: Schema<IRifa> = new mongoose.Schema({
     // Sem default: o índice único do número no backend da rifa conta com
     // registros reais sem esse campo.
     teste: { type: Boolean },
+    nomePagador: { type: String, default: null },
+    metodoPagamento: { type: String, default: null },
 });
 
 // Só documentação: a conexão usa autoIndex: false (database/rifadb.ts), e
