@@ -88,21 +88,44 @@ interface ItemResumo {
     paymentId: string;
     email: string | null;
     aprovadoEm?: Date | null;
+    nomePagador?: string | null;
+    metodoPagamento?: string | null;
     _id: Types.ObjectId;
 }
 
-export interface PendenteEscolha {
+interface ContatoItem {
     paymentId: string;
     email: string | null;
+    /** Nome de quem pagou, para quando não há e-mail. */
+    nomePagador: string | null;
+    /** pix, cartao ou o tipo informado pelo Mercado Pago. */
+    metodoPagamento: string | null;
+    /** Link para escolher o número (precisa de RIFA_SITE_URL). */
+    linkEscolha: string | null;
+}
+
+/** Link da escolha do número no site da rifa — o mesmo dos e-mails de lembrete. */
+const linkEscolha = (paymentId: string): string | null => {
+    const site = process.env.RIFA_SITE_URL?.replace(/\/+$/, "");
+    return site ? `${site}/rifa/pagamento-aprovado?payment_id=${encodeURIComponent(paymentId)}` : null;
+};
+
+const contatoDoItem = (item: ItemResumo): ContatoItem => ({
+    paymentId: item.paymentId,
+    email: item.email ?? null,
+    nomePagador: item.nomePagador ?? null,
+    metodoPagamento: item.metodoPagamento ?? null,
+    linkEscolha: item.paymentId.startsWith("MANUAL-") ? null : linkEscolha(item.paymentId),
+});
+
+export interface PendenteEscolha extends ContatoItem {
     /** Data da aprovação (ou do registro, para os antigos sem aprovadoEm). */
     pagoEm: string;
     /** Dias até o número ser sorteado; 0 = sorteio na próxima execução. */
     diasRestantes: number;
 }
 
-export interface Reserva {
-    paymentId: string;
-    email: string | null;
+export interface Reserva extends ContatoItem {
     /** Quando o Pix foi gerado (data de criação do registro). */
     criadoEm: string;
 }
@@ -126,7 +149,7 @@ export interface ResumoRifas {
  */
 export const resumoRifasAdminService = async (): Promise<ResponseType> => {
     try {
-        const campos = { paymentId: 1, email: 1, aprovadoEm: 1 };
+        const campos = { paymentId: 1, email: 1, aprovadoEm: 1, nomePagador: 1, metodoPagamento: 1 };
         const [resultado] = await getRifaModel().aggregate<{
             compradas: { n: number }[];
             pendentesEscolha: ItemResumo[];
@@ -158,8 +181,7 @@ export const resumoRifasAdminService = async (): Promise<ResponseType> => {
                 const pagoEm = item.aprovadoEm ? new Date(item.aprovadoEm) : item._id.getTimestamp();
                 const prazo = pagoEm.getTime() + PRAZO_ESCOLHA_DIAS * DIA_MS;
                 return {
-                    paymentId: item.paymentId,
-                    email: item.email ?? null,
+                    ...contatoDoItem(item),
                     pagoEm: pagoEm.toISOString(),
                     diasRestantes: Math.max(0, Math.ceil((prazo - agora) / DIA_MS)),
                 };
@@ -167,8 +189,7 @@ export const resumoRifasAdminService = async (): Promise<ResponseType> => {
             .sort((a, b) => a.pagoEm.localeCompare(b.pagoEm));
 
         const reservadas: Reserva[] = (resultado?.reservadas ?? []).map((item) => ({
-            paymentId: item.paymentId,
-            email: item.email ?? null,
+            ...contatoDoItem(item),
             criadoEm: item._id.getTimestamp().toISOString(),
         }));
 
@@ -187,6 +208,39 @@ export const resumoRifasAdminService = async (): Promise<ResponseType> => {
         return { status: 200, message: "Resumo da rifa.", data: resumo };
     } catch (error: any) {
         console.error("resumoRifasAdminService error:", error);
+        throw error;
+    }
+};
+
+/**
+ * Informa à mão o e-mail de um pagamento que ficou sem (o Mercado Pago não
+ * devolveu). A partir daí o backend da rifa manda os lembretes de escolha do
+ * número para ele. Pagamento cancelado não recebe e-mail.
+ */
+export const definirEmailPagamentoService = async (
+    paymentId: unknown,
+    email: unknown
+): Promise<ResponseType> => {
+    try {
+        const id = String(paymentId ?? "").trim();
+        if (!id) throw new MissingParamsError("Informe o pagamento.");
+
+        const normalizado = String(email ?? "").trim().toLowerCase();
+        if (!EMAIL_REGEX.test(normalizado)) {
+            throw new MissingParamsError("O campo 'E-mail' não parece válido.");
+        }
+
+        const rifa = await getRifaModel().findOneAndUpdate(
+            { paymentId: id, status: { $ne: "CANCELADO" } },
+            { $set: { email: normalizado } },
+            { new: true }
+        ).select("paymentId email status claimedNumber").lean();
+
+        if (!rifa) throw new NotFoundError("Pagamento não encontrado (ou cancelado).");
+
+        return { status: 200, message: "E-mail atualizado.", data: rifa };
+    } catch (error: any) {
+        console.error("definirEmailPagamentoService error:", error);
         throw error;
     }
 };
