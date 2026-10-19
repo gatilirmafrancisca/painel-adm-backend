@@ -89,15 +89,19 @@ interface ItemResumo {
     email: string | null;
     aprovadoEm?: Date | null;
     nomePagador?: string | null;
+    bancoPagador?: string | null;
     metodoPagamento?: string | null;
+    dataPagamento?: Date | null;
     _id: Types.ObjectId;
 }
 
 interface ContatoItem {
     paymentId: string;
     email: string | null;
-    /** Nome de quem pagou, para quando não há e-mail. */
+    /** Nome de quem pagou (pagador ou titular do cartão), para quando não há e-mail. */
     nomePagador: string | null;
+    /** Banco de origem do Pix — ajuda a achar o pagamento no extrato. */
+    bancoPagador: string | null;
     /** pix, cartao ou o tipo informado pelo Mercado Pago. */
     metodoPagamento: string | null;
     /** Link para escolher o número (precisa de RIFA_SITE_URL). */
@@ -114,12 +118,13 @@ const contatoDoItem = (item: ItemResumo): ContatoItem => ({
     paymentId: item.paymentId,
     email: item.email ?? null,
     nomePagador: item.nomePagador ?? null,
+    bancoPagador: item.bancoPagador ?? null,
     metodoPagamento: item.metodoPagamento ?? null,
     linkEscolha: item.paymentId.startsWith("MANUAL-") ? null : linkEscolha(item.paymentId),
 });
 
 export interface PendenteEscolha extends ContatoItem {
-    /** Data da aprovação (ou do registro, para os antigos sem aprovadoEm). */
+    /** Data do pagamento no Mercado Pago (ou, sem ela, da aprovação/registro). */
     pagoEm: string;
     /** Dias até o número ser sorteado; 0 = sorteio na próxima execução. */
     diasRestantes: number;
@@ -149,7 +154,9 @@ export interface ResumoRifas {
  */
 export const resumoRifasAdminService = async (): Promise<ResponseType> => {
     try {
-        const campos = { paymentId: 1, email: 1, aprovadoEm: 1, nomePagador: 1, metodoPagamento: 1 };
+        const campos = {
+            paymentId: 1, email: 1, aprovadoEm: 1, nomePagador: 1, bancoPagador: 1, metodoPagamento: 1, dataPagamento: 1,
+        };
         const [resultado] = await getRifaModel().aggregate<{
             compradas: { n: number }[];
             pendentesEscolha: ItemResumo[];
@@ -178,8 +185,11 @@ export const resumoRifasAdminService = async (): Promise<ResponseType> => {
         const agora = Date.now();
         const pendentesEscolha: PendenteEscolha[] = (resultado?.pendentesEscolha ?? [])
             .map((item) => {
-                const pagoEm = item.aprovadoEm ? new Date(item.aprovadoEm) : item._id.getTimestamp();
-                const prazo = pagoEm.getTime() + PRAZO_ESCOLHA_DIAS * DIA_MS;
+                // O prazo conta de aprovadoEm (como no backend da rifa); a data
+                // mostrada é a do pagamento, para achar no extrato.
+                const inicioPrazo = item.aprovadoEm ? new Date(item.aprovadoEm) : item._id.getTimestamp();
+                const pagoEm = item.dataPagamento ? new Date(item.dataPagamento) : inicioPrazo;
+                const prazo = inicioPrazo.getTime() + PRAZO_ESCOLHA_DIAS * DIA_MS;
                 return {
                     ...contatoDoItem(item),
                     pagoEm: pagoEm.toISOString(),
