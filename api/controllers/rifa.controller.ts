@@ -23,6 +23,17 @@ export const resumoRifasAdminController = async(_req: Request, res: Response, ne
 
 }
 
+export const definirEmailPagamentoController = async(req: Request, res: Response, next: NextFunction) => {
+
+    try {
+
+        const resposta = await rifaService.definirEmailPagamentoService(req.params.paymentId, req.body?.email);
+        return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
+
+    } catch (error) {next(error);}
+
+}
+
 export const criarRifaManualController = async(
     req:Request<any, any, rifaService.CadastroManualInput>, 
     res: Response, 
