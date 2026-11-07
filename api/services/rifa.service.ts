@@ -1,4 +1,6 @@
 import { getRifaModel, IRifa } from "../models/Rifa.js";
+import { getPedidoModel, type IPedido } from "../models/Pedido.js";
+import * as RifaTypes from "../types/rifa.types.js";
 import { ConflictError, MissingParamsError, NotFoundError } from "../utils/errors.js";
 import type ResponseType from "../types/response.type.js";
 import { Types, Document } from "mongoose";
@@ -67,9 +69,14 @@ function validarNumero(value: unknown): number {
 export const listarRifasAdminService = async (): Promise<ResponseType> => {
     try {
         // Números de Pix de teste (R$ 0,01) não são vendas.
+        // Reserva vencida (o backend da rifa apaga em seguida) não aparece.
         const rifas = await getRifaModel()
-            .find({ claimedNumber: { $ne: null }, teste: { $ne: true } })
-            .select("name phone email claimedNumber status paymentId")
+            .find({
+                claimedNumber: { $ne: null },
+                teste: { $ne: true },
+                $nor: [{ status: "RESERVADO", reservaExpiraEm: { $lte: new Date() } }],
+            })
+            .select("name phone email claimedNumber status paymentId pedidoId metodoPagamento dataPagamento reservaExpiraEm")
             .sort({ claimedNumber: 1 })
             .lean();
 
@@ -89,15 +96,19 @@ interface ItemResumo {
     email: string | null;
     aprovadoEm?: Date | null;
     nomePagador?: string | null;
+    bancoPagador?: string | null;
     metodoPagamento?: string | null;
+    dataPagamento?: Date | null;
     _id: Types.ObjectId;
 }
 
 interface ContatoItem {
     paymentId: string;
     email: string | null;
-    /** Nome de quem pagou, para quando não há e-mail. */
+    /** Nome de quem pagou (pagador ou titular do cartão), para quando não há e-mail. */
     nomePagador: string | null;
+    /** Banco de origem do Pix — ajuda a achar o pagamento no extrato. */
+    bancoPagador: string | null;
     /** pix, cartao ou o tipo informado pelo Mercado Pago. */
     metodoPagamento: string | null;
     /** Link para escolher o número (precisa de RIFA_SITE_URL). */
@@ -114,12 +125,13 @@ const contatoDoItem = (item: ItemResumo): ContatoItem => ({
     paymentId: item.paymentId,
     email: item.email ?? null,
     nomePagador: item.nomePagador ?? null,
+    bancoPagador: item.bancoPagador ?? null,
     metodoPagamento: item.metodoPagamento ?? null,
     linkEscolha: item.paymentId.startsWith("MANUAL-") ? null : linkEscolha(item.paymentId),
 });
 
 export interface PendenteEscolha extends ContatoItem {
-    /** Data da aprovação (ou do registro, para os antigos sem aprovadoEm). */
+    /** Data do pagamento no Mercado Pago (ou, sem ela, da aprovação/registro). */
     pagoEm: string;
     /** Dias até o número ser sorteado; 0 = sorteio na próxima execução. */
     diasRestantes: number;
@@ -128,6 +140,11 @@ export interface PendenteEscolha extends ContatoItem {
 export interface Reserva extends ContatoItem {
     /** Quando o Pix foi gerado (data de criação do registro). */
     criadoEm: string;
+    /** Compra com reserva: o pedido, os números guardados e até quando. */
+    pedidoId?: string;
+    numeros?: number[];
+    expiraEm?: string;
+    nome?: string | null;
 }
 
 export interface ResumoRifas {
@@ -149,11 +166,15 @@ export interface ResumoRifas {
  */
 export const resumoRifasAdminService = async (): Promise<ResponseType> => {
     try {
-        const campos = { paymentId: 1, email: 1, aprovadoEm: 1, nomePagador: 1, metodoPagamento: 1 };
+        const campos = {
+            paymentId: 1, email: 1, aprovadoEm: 1, nomePagador: 1, bancoPagador: 1, metodoPagamento: 1, dataPagamento: 1,
+        };
+        const agoraData = new Date();
         const [resultado] = await getRifaModel().aggregate<{
             compradas: { n: number }[];
             pendentesEscolha: ItemResumo[];
             reservadas: ItemResumo[];
+            reservasAtivas: { _id: string; numeros: number[]; expiraEm: Date }[];
         }>([
             { $match: { teste: { $ne: true }, status: { $ne: "CANCELADO" } } },
             { $sort: { _id: 1 } },
@@ -171,6 +192,12 @@ export const resumoRifasAdminService = async (): Promise<ResponseType> => {
                         { $match: { status: "PENDENTE" } },
                         { $project: campos },
                     ],
+                    // Números guardados por uma compra do site, ainda dentro do prazo.
+                    reservasAtivas: [
+                        { $match: { status: "RESERVADO", reservaExpiraEm: { $gt: agoraData } } },
+                        { $sort: { claimedNumber: 1 } },
+                        { $group: { _id: "$pedidoId", numeros: { $push: "$claimedNumber" }, expiraEm: { $max: "$reservaExpiraEm" } } },
+                    ],
                 },
             },
         ]);
@@ -178,8 +205,11 @@ export const resumoRifasAdminService = async (): Promise<ResponseType> => {
         const agora = Date.now();
         const pendentesEscolha: PendenteEscolha[] = (resultado?.pendentesEscolha ?? [])
             .map((item) => {
-                const pagoEm = item.aprovadoEm ? new Date(item.aprovadoEm) : item._id.getTimestamp();
-                const prazo = pagoEm.getTime() + PRAZO_ESCOLHA_DIAS * DIA_MS;
+                // O prazo conta de aprovadoEm (como no backend da rifa); a data
+                // mostrada é a do pagamento, para achar no extrato.
+                const inicioPrazo = item.aprovadoEm ? new Date(item.aprovadoEm) : item._id.getTimestamp();
+                const pagoEm = item.dataPagamento ? new Date(item.dataPagamento) : inicioPrazo;
+                const prazo = inicioPrazo.getTime() + PRAZO_ESCOLHA_DIAS * DIA_MS;
                 return {
                     ...contatoDoItem(item),
                     pagoEm: pagoEm.toISOString(),
@@ -188,19 +218,45 @@ export const resumoRifasAdminService = async (): Promise<ResponseType> => {
             })
             .sort((a, b) => a.pagoEm.localeCompare(b.pagoEm));
 
-        const reservadas: Reserva[] = (resultado?.reservadas ?? []).map((item) => ({
+        const reservadasAntigas: Reserva[] = (resultado?.reservadas ?? []).map((item) => ({
             ...contatoDoItem(item),
             criadoEm: item._id.getTimestamp().toISOString(),
         }));
 
+        const ativas = resultado?.reservasAtivas ?? [];
+        const pedidos = ativas.length
+            ? await getPedidoModel()
+                .find({ _id: { $in: ativas.map((a) => a._id) } }, { nome: 1, email: 1, criadoEm: 1, pagamento: 1 })
+                .lean()
+            : [];
+        const pedidoPorId = new Map(pedidos.map((p) => [String(p._id), p]));
+        const reservasDeCompras: Reserva[] = ativas.map((a) => {
+            const pedido = pedidoPorId.get(String(a._id));
+            return {
+                paymentId: pedido?.pagamento?.mpPaymentId ?? String(a._id),
+                email: pedido?.email ?? null,
+                nomePagador: null,
+                bancoPagador: null,
+                metodoPagamento: pedido?.pagamento?.metodo ?? null,
+                linkEscolha: null,
+                criadoEm: (pedido?.criadoEm ?? agoraData).toISOString(),
+                pedidoId: String(a._id),
+                numeros: a.numeros,
+                expiraEm: new Date(a.expiraEm).toISOString(),
+                nome: pedido?.nome ?? null,
+            };
+        });
+        const reservadas = [...reservasDeCompras, ...reservadasAntigas];
+        const vagasReservadas = reservadasAntigas.length + ativas.reduce((t, a) => t + a.numeros.length, 0);
+
         const compradas = resultado?.compradas[0]?.n ?? 0;
-        const ocupadas = compradas + pendentesEscolha.length + reservadas.length;
+        const ocupadas = compradas + pendentesEscolha.length + vagasReservadas;
 
         const resumo: ResumoRifas = {
             total: TOTAL_NUMEROS,
             compradas,
             pendentesEscolha: pendentesEscolha.length,
-            reservadas: reservadas.length,
+            reservadas: vagasReservadas,
             disponiveis: Math.max(0, TOTAL_NUMEROS - ocupadas),
             listas: { pendentesEscolha, reservadas },
         };
@@ -290,11 +346,21 @@ export const criarRifaManualService = async (
 };
 
 
-export const excluirRifaService = async (claimedNumber: unknown): Promise<ResponseType> => {
+export const excluirRifaService = async (claimedNumber: unknown, forcar = false): Promise<ResponseType> => {
     try {
         const numero = validarNumero(claimedNumber);
- 
-        const resultado = await getRifaModel().findOneAndDelete({ claimedNumber: numero });
+
+        // Número de uma compra do site: apagar sem querer tira o número de quem
+        // pagou. Reservado: a pessoa está pagando agora.
+        const atual = await getRifaModel().findOne({ claimedNumber: numero, teste: { $ne: true } }).lean();
+        if (atual?.status === "RESERVADO") {
+            throw new ConflictError("Esse número está reservado por alguém que está pagando agora. Aguarde a reserva terminar.");
+        }
+        if (atual?.pedidoId && !forcar) {
+            throw new ConflictError("Esse número foi comprado pelo site. Para excluir mesmo assim, confirme a exclusão.");
+        }
+
+        const resultado = await getRifaModel().findOneAndDelete({ claimedNumber: numero, teste: { $ne: true } });
  
         if (!resultado) {
             throw new NotFoundError(`Nenhum registro encontrado com o número ${numero}.`);
@@ -305,4 +371,150 @@ export const excluirRifaService = async (claimedNumber: unknown): Promise<Respon
         console.error("excluirRifaService error:", error);
         throw error;
     }
+};
+
+// ---------- Compras com reserva (Ação de Natal) ----------
+
+const ABERTOS: RifaTypes.StatusPedido[] = ["RESERVADO", "AGUARDANDO_PAGAMENTO"];
+
+/** Escapa o texto da busca: ele vira regex, e regex vinda do navegador não pode ser executada. */
+const escaparRegex = (texto: string) => texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+export interface PedidoAdmin {
+    pedidoId: string;
+    status: RifaTypes.StatusPedido;
+    numeros: number[];
+    numerosConfirmados: number[];
+    numerosAEscolher: number;
+    valor: number;
+    metodo: "pix" | "cartao" | null;
+    mpPaymentId: string | null;
+    nome: string | null;
+    email: string | null;
+    phone: string | null;
+    criadoEm: string;
+    expiraEm: string;
+    pagoEm: string | null;
+    alertas: RifaTypes.AlertaPedido[];
+    pagamentosExtras: { mpPaymentId: string; valor: number; em: string }[];
+    utmSource: string | null;
+}
+
+function pedidoAdmin(p: IPedido, agora = Date.now()): PedidoAdmin {
+    const vencido = ABERTOS.includes(p.status) && new Date(p.expiraEm).getTime() <= agora;
+    return {
+        pedidoId: String(p._id),
+        status: vencido ? "EXPIRADO" : p.status,
+        numeros: p.numeros ?? [],
+        numerosConfirmados: p.numerosConfirmados ?? [],
+        numerosAEscolher: p.numerosAEscolher ?? 0,
+        valor: p.valor ?? 0,
+        metodo: p.pagamento?.metodo ?? null,
+        mpPaymentId: p.pagoPor ?? p.pagamento?.mpPaymentId ?? null,
+        nome: p.nome ?? null,
+        email: p.email ?? null,
+        phone: p.phone ?? null,
+        criadoEm: new Date(p.criadoEm).toISOString(),
+        expiraEm: new Date(p.expiraEm).toISOString(),
+        pagoEm: p.pagoEm ? new Date(p.pagoEm).toISOString() : null,
+        alertas: p.alertas ?? [],
+        pagamentosExtras: (p.pagamentosExtras ?? []).map((e) => ({ ...e, em: new Date(e.em).toISOString() })),
+        utmSource: p.utmSource ?? null,
+    };
+}
+
+const CAMPOS_PEDIDO = { ipHash: 0, "pagamento.qrCode": 0, "pagamento.qrCodeBase64": 0, "pagamento.initPoint": 0 } as const;
+
+/**
+ * Compras da Ação de Natal, das mais novas para as mais antigas. status filtra
+ * (um dos STATUSPEDIDO); busca procura por número, nome, e-mail ou WhatsApp.
+ */
+export const listarPedidosAdminService = async (
+    { status, busca }: { status?: unknown; busca?: unknown }
+): Promise<ResponseType> => {
+    const filtro: Record<string, unknown> = { teste: { $ne: true } };
+    const agora = new Date();
+
+    if (status !== undefined && status !== "") {
+        if (typeof status !== "string" || !RifaTypes.STATUSPEDIDO.includes(status as RifaTypes.StatusPedido)) {
+            throw new MissingParamsError(`Status inválido. Valores: ${RifaTypes.STATUSPEDIDO.join(", ")}.`);
+        }
+        if (status === "EXPIRADO") {
+            filtro.$or = [{ status: "EXPIRADO" }, { status: { $in: ABERTOS }, expiraEm: { $lte: agora } }];
+        } else if (ABERTOS.includes(status as RifaTypes.StatusPedido)) {
+            filtro.status = status;
+            filtro.expiraEm = { $gt: agora };
+        } else {
+            filtro.status = status;
+        }
+    }
+
+    if (busca !== undefined && busca !== "") {
+        if (typeof busca !== "string" || busca.length > 100) throw new MissingParamsError("Busca inválida.");
+        const termo = busca.trim();
+        const digitos = termo.replace(/\D/g, "");
+        const ou: Record<string, unknown>[] = [
+            { nome: { $regex: escaparRegex(termo), $options: "i" } },
+            { email: { $regex: escaparRegex(termo), $options: "i" } },
+        ];
+        if (/^\d{1,3}$/.test(termo)) ou.push({ numeros: Number(termo) }, { numerosConfirmados: Number(termo) });
+        if (digitos.length >= 4) ou.push({ phone: { $regex: escaparRegex(digitos) } });
+        filtro.$and = [...((filtro.$and as unknown[]) ?? []), { $or: ou }];
+    }
+
+    const pedidos = await getPedidoModel()
+        .find(filtro, CAMPOS_PEDIDO)
+        .sort({ criadoEm: -1 })
+        .limit(500)
+        .lean();
+
+    return { status: 200, message: "Compras.", data: pedidos.map((p) => pedidoAdmin(p)) };
+};
+
+/**
+ * O que precisa de alguém olhar: pagamento em dobro (estornar), valor pago
+ * diferente do pedido, pago depois de a reserva vencer e números que a pessoa
+ * ainda vai escolher.
+ */
+export const alertasPedidosAdminService = async (): Promise<ResponseType> => {
+    const pedidos = await getPedidoModel()
+        .find(
+            { teste: { $ne: true }, $or: [{ "alertas.0": { $exists: true } }, { status: "PAGO_PARCIAL" }] },
+            CAMPOS_PEDIDO
+        )
+        .sort({ atualizadoEm: -1 })
+        .limit(200)
+        .lean();
+    return { status: 200, message: "Alertas.", data: pedidos.map((p) => pedidoAdmin(p)) };
+};
+
+/** Célula de CSV segura: aspas escapadas e fórmulas neutralizadas (=, +, -, @ no começo). */
+export function celulaCsv(valor: unknown): string {
+    let texto = valor === null || valor === undefined ? "" : String(valor);
+    if (/^[=+\-@\t\r]/.test(texto)) texto = `'${texto}`;
+    return `"${texto.replace(/"/g, '""')}"`;
+}
+
+/** Planilha dos números vendidos (para o sorteio e a prestação de contas). */
+export const exportarCsvService = async (): Promise<string> => {
+    const rifas = await getRifaModel()
+        .find({ status: "APROVADO", claimedNumber: { $ne: null }, teste: { $ne: true } })
+        .select("claimedNumber name email phone metodoPagamento dataPagamento paymentId pedidoId mpPaymentId")
+        .sort({ claimedNumber: 1 })
+        .lean();
+
+    const cabecalho = ["Número", "Nome", "E-mail", "WhatsApp", "Pagamento", "Pago em", "ID do pagamento", "Compra"];
+    const linhas = rifas.map((r) => [
+        String(r.claimedNumber).padStart(3, "0"),
+        r.name,
+        r.email,
+        r.phone,
+        r.metodoPagamento === "pix" ? "Pix" : r.metodoPagamento === "cartao" ? "Cartão" : (r.metodoPagamento ?? (String(r.paymentId).startsWith("MANUAL-") ? "Manual" : "")),
+        r.dataPagamento ? new Date(r.dataPagamento).toISOString() : "",
+        r.mpPaymentId ?? (String(r.paymentId).startsWith("PEDIDO-") ? "" : r.paymentId),
+        r.pedidoId ?? "",
+    ].map(celulaCsv).join(";"));
+
+    // BOM: o Excel abre os acentos certo.
+    return "\uFEFF" + [cabecalho.map(celulaCsv).join(";"), ...linhas].join("\r\n") + "\r\n";
 };

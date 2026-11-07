@@ -1,47 +1,20 @@
-import express, {Request, Response} from "express"
-import cors from "cors"
-import dotenv from "dotenv"
+// Primeiro import: o app.ts lê o .env (FRONTEND_URL) ao ser carregado.
+import "dotenv/config";
 import database from "./database/configdb.js"
-import userRoute from "./routes/user.route.js";
-import gatoRoute from "./routes/gato.route.js";
-import financeiroRoute from "./routes/financeiro.route.js";
-import protectedRoute from "./routes/protected.route.js";
-import rifaRoute from "./routes/rifa.route.js";
-import { errorHandler } from "./middlewares/errors.middleware.js";
+import { app } from "./app.js";
+import { getJwtSecret } from "./utils/jwtSecret.js";
 
-dotenv.config();
-
-// App
-const app = express();
+// Sem um JWT_SECRET forte o painel não sobe: um segredo padrão deixaria
+// qualquer pessoa forjar um token de admin.
+getJwtSecret();
 
 // Database
 database.connect();
-
-app.use(express.json());
-app.use(cors(
-  { origin: process.env.FRONTEND_URL, credentials: true }
-));
-
-/** routes **/ 
-
-app.use("/protected", protectedRoute);
-app.use("/auth", userRoute);
-app.use("/gatos", gatoRoute);
-app.use("/financeiro", financeiroRoute);
-app.use("/rifa", rifaRoute);
-
-app.get("/", (req: Request, res: Response) => {
-  res.send({ message: "App Working" });
-});
-
-app.use((req: Request, res: Response) => {
-    res.status(404).json({ message: `Cannot ${req.method} ${req.path}` });
-});
-
-app.use(errorHandler);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 app.listen(PORT, () => {
   console.log(`App is listening on http://localhost:${PORT}/`);
-  });
+});
+
+export default app;

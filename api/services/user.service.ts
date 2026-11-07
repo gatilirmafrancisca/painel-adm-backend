@@ -3,11 +3,20 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { Types } from "mongoose";
 import ResponseType from "../types/response.type.js";
+import { USERTYPES } from "../types/user.type.js";
+import { getJwtSecret, JWT_ALGORITMO } from "../utils/jwtSecret.js";
 
+/** Mesma resposta para usuário inexistente e senha errada: não revela quem existe. */
+const CREDENCIAIS_INVALIDAS: ResponseType = { status: 401, message: "Login ou senha inválidos." };
+
+// Hash de uma senha qualquer: o login de um usuário inexistente gasta o mesmo
+// tempo do bcrypt.compare, então o tempo de resposta também não revela nada.
+const HASH_FALSO = bcrypt.hashSync("senha-que-nao-existe-Aa1!", 10);
 
 const createJWT = (uid: Types.ObjectId | string) => {
     const id = typeof uid === "string" ? uid : uid.toString();
-    return jwt.sign({ id }, process.env.JWT_SECRET || "secret", { expiresIn: "7d" }); // Acesso expira em 7 dias
+    // Acesso expira em 7 dias
+    return jwt.sign({ id }, getJwtSecret(), { expiresIn: "7d", algorithm: JWT_ALGORITMO });
 };
 
 
@@ -62,6 +71,15 @@ export const registerService = async (data: IUser): Promise<ResponseType> => {
             return { status: 400, message: "Login, email, e senha são necessários." };
         }
 
+        // Só texto: um objeto ({ $ne: null }) viraria filtro de consulta.
+        if (typeof data.login !== "string" || typeof data.password !== "string" || typeof data.email !== "string") {
+            return { status: 400, message: "Login, email, e senha são necessários." };
+        }
+
+        if (!USERTYPES.includes(data.utype)) {
+            return { status: 400, message: `Tipo de usuário inválido. Valores permitidos: ${USERTYPES.join(", ")}.` };
+        }
+
         // Validação email existente
         const existingEmail = await locateUserByEmail(data.email);
         if (existingEmail) {
@@ -105,22 +123,24 @@ export const registerService = async (data: IUser): Promise<ResponseType> => {
 export const loginService = async (data: IUser): Promise<ResponseType> => {
 
     try {
-        if (!data || !data.login || !data.password) {
+        if (!data || typeof data.login !== "string" || typeof data.password !== "string" || !data.login || !data.password) {
             return { status: 400, message: "Login e senha são obrigatórios." };
         }
 
         const user = await locateUserByLogin(data.login);
+        // Logs sem login nem e-mail (dado pessoal, LGPD).
         if (!user) {
-            console.log("User not found with login:", data.login);
-            return { status: 404, message: "Usuário inválido" };
+            await bcrypt.compare(data.password, HASH_FALSO);
+            console.info("[login] tentativa recusada");
+            return CREDENCIAIS_INVALIDAS;
         }
 
         const isMatch = await bcrypt.compare(data.password, user.password);
         if (!isMatch) {
-            console.log("Invalid password attempt for login:", data.login); 
-            return { status: 401, message: "Senha incorreta." };
+            console.info("[login] tentativa recusada");
+            return CREDENCIAIS_INVALIDAS;
         }
-        console.log("User logged in successfully:", user.email);
+        console.info("[login] sucesso", String(user._id));
 
        const token = createJWT(user._id);
 
