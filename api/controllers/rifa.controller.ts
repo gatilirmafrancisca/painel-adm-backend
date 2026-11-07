@@ -63,9 +63,35 @@ export const excluirRifaController = async (req: Request, res: Response, next: N
         }
 
         const { claimedNumber } = req.params;
-        const resposta = await rifaService.excluirRifaService(claimedNumber);
+        const resposta = await rifaService.excluirRifaService(claimedNumber, req.query.forcar === "1");
         return res.status(resposta.status).json({ message: resposta.message, data: resposta.data }); 
 
     } catch (error) {next(error);}
 
+}
+
+export const listarPedidosAdminController = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const resposta = await rifaService.listarPedidosAdminService({ status: req.query.status, busca: req.query.busca });
+        return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
+    } catch (error) { next(error); }
+}
+
+export const alertasPedidosAdminController = async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+        const resposta = await rifaService.alertasPedidosAdminService();
+        return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
+    } catch (error) { next(error); }
+}
+
+export const exportarCsvController = async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+        const csv = await rifaService.exportarCsvService();
+        const hoje = new Date().toISOString().slice(0, 10);
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="rifa-numeros-${hoje}.csv"`);
+        // Dados pessoais: nunca em cache.
+        res.setHeader("Cache-Control", "no-store");
+        return res.status(200).send(csv);
+    } catch (error) { next(error); }
 }

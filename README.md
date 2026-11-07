@@ -26,6 +26,19 @@ ADMIN_LOGIN=fulana ADMIN_EMAIL=fulana@exemplo.org ADMIN_SENHA='Uma.Senha.Forte1'
 - Rotas internas (`/financeiro/interno/*`) exigem `x-internal-secret`, comparado em tempo constante.
 - Dados pessoais dos compradores (`/rifa/*`) só com JWT.
 
+## Rifa / Ação de Natal
+
+| Rota (JWT) | O que faz |
+|---|---|
+| `GET /rifa/resumo` | Vagas: compradas, pendentes de escolha, reservadas (Pix antigo + números de compras do site ainda no prazo) e disponíveis |
+| `GET /rifa/listar-rifas` | Um registro por número (sem reservas vencidas) |
+| `GET /rifa/pedidos?status=&busca=` | Compras com reserva: números, valor, Pix/cartão, contato, prazos e alertas. `busca` por número, nome, e-mail ou WhatsApp |
+| `GET /rifa/alertas` | Pagamento em dobro (estornar), valor divergente, pago depois da reserva vencer, números a escolher |
+| `GET /rifa/exportar.csv` | Planilha dos números vendidos (sem cache; fórmulas neutralizadas) |
+| `DELETE /rifa/excluir-rifa/:numero[?forcar=1]` | Número reservado agora não sai; comprado pelo site só com `forcar=1` |
+
+As compras ficam na coleção `pedidos` do banco da rifa, gravada pelo `gatil-mercadopago-backend`; o painel só lê.
+
 ## Testes
 
 ```bash
