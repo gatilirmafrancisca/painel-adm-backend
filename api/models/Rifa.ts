@@ -27,6 +27,11 @@ export interface IRifa {
     bancoPagador?: string | null; // banco de origem do Pix (não é a pessoa)
     metodoPagamento?: string | null;
     dataPagamento?: Date | null; // date_approved real do Mercado Pago
+    // Compra com reserva (backend da rifa): o pedido, o pagamento real no
+    // Mercado Pago e até quando o número fica reservado (status RESERVADO).
+    pedidoId?: string | null;
+    mpPaymentId?: string | null;
+    reservaExpiraEm?: Date | null;
 }
 
 const RifaSchema: Schema<IRifa> = new mongoose.Schema({
@@ -49,6 +54,9 @@ const RifaSchema: Schema<IRifa> = new mongoose.Schema({
     bancoPagador: { type: String, default: null },
     metodoPagamento: { type: String, default: null },
     dataPagamento: { type: Date, default: null },
+    pedidoId: { type: String, default: null },
+    mpPaymentId: { type: String, default: null },
+    reservaExpiraEm: { type: Date, default: null },
 });
 
 // Só documentação: a conexão usa autoIndex: false (database/rifadb.ts), e
