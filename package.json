@@ -11,7 +11,10 @@
     "start": "node api/index.ts",
     "start:database": "docker compose up -d",
     "generate-secret-key": "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
-    "tests": "echo 'No tests to run'"
+    "tests": "vitest run",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "criar-admin": "tsx scripts/criarAdmin.ts"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
@@ -22,10 +25,14 @@
     "@types/multer": "^2.1.0",
     "@types/node": "^25.5.0",
     "@types/streamifier": "^0.1.2",
+    "@types/supertest": "^7.2.1",
     "@vercel/node": "^4.0.0",
+    "mongodb-memory-server": "^11.3.0",
+    "supertest": "^7.3.2",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "vitest": "^5.1.0"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -33,6 +40,8 @@
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.3",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.3.2",
     "multer": "^2.1.1",
