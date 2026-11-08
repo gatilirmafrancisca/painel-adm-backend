@@ -12,6 +12,9 @@ process.env.CLOUDINARY_CLOUD_NAME ??= "teste";
 process.env.CLOUDINARY_API_KEY ??= "teste";
 process.env.CLOUDINARY_API_SECRET ??= "teste";
 
+// Igual à produção (database/configdb.ts): filtros com campos fora do schema são descartados.
+mongoose.set("strictQuery", true);
+
 let mongod: MongoMemoryServer;
 
 beforeAll(async () => {
