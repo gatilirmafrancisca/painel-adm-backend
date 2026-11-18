@@ -39,7 +39,13 @@ export interface IPedido {
 }
 
 // strict: false — o schema de verdade é o do backend da rifa; aqui só leitura.
-const PedidoSchema = new mongoose.Schema<IPedido>({ _id: String }, { strict: false, versionKey: false });
+// strictQuery: false — o configdb liga strictQuery para todo o app, e com ele
+// o Mongoose APAGA dos filtros todo campo que não está neste schema (status,
+// alertas, teste...): /rifa/alertas e /rifa/pedidos passavam a devolver tudo.
+const PedidoSchema = new mongoose.Schema<IPedido>(
+    { _id: String },
+    { strict: false, strictQuery: false, versionKey: false }
+);
 
 let PedidoModel: Model<IPedido> | null = null;
 
