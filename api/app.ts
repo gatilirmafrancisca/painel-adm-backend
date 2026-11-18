@@ -6,6 +6,7 @@ import gatoRoute from "./routes/gato.route.js";
 import financeiroRoute from "./routes/financeiro.route.js";
 import protectedRoute from "./routes/protected.route.js";
 import rifaRoute from "./routes/rifa.route.js";
+import utmRoute from "./routes/utm.route.js";
 import { errorHandler } from "./middlewares/errors.middleware.js";
 
 /** App sem banco nem listen: os testes sobem só isto, com o Mongo em memória. */
@@ -28,6 +29,7 @@ app.use("/auth", userRoute);
 app.use("/gatos", gatoRoute);
 app.use("/financeiro", financeiroRoute);
 app.use("/rifa", rifaRoute);
+app.use("/utm", utmRoute);
 
 app.get("/", (req: Request, res: Response) => {
   res.send({ message: "App Working" });

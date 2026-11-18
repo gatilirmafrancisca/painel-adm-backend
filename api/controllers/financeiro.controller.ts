@@ -22,7 +22,8 @@ export const criarTransferencia = async(req: Request<any, any, ITransferencia> ,
 
 export const sincronizarMercadoPago = async(req: Request<any, any, ITransferencia>, res: Response, next: NextFunction) => {
     try {
-        const resposta = await financeiroService.criarTransferenciaService(req.body, req);
+        // Pagamento já feito no Mercado Pago: a UTM nunca impede o registro.
+        const resposta = await financeiroService.criarTransferenciaService(req.body, req, { tolerarUtmDesconhecida: true });
         return res.status(resposta.status).json({ message: resposta.message, data: resposta.data });
     } catch (error) {
         next(error);

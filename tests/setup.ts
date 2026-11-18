@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach } from "vitest";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import mongoose from "mongoose";
 import { getRifaConnection } from "../api/database/rifadb.js";
+import { limparCacheUtm } from "../api/services/utm.service.js";
 
 process.env.JWT_SECRET = "segredo-de-teste-com-mais-de-32-caracteres!!";
 process.env.MERCADOPAGO_BACKEND_INTERNAL_SECRET = "segredo-interno-teste";
@@ -25,6 +26,8 @@ beforeEach(async () => {
     await mongoose.connection.db?.dropDatabase();
     await getRifaConnection().asPromise();
     await getRifaConnection().db?.dropDatabase();
+    // O cache das tags de UTM é por processo: não pode vazar entre testes.
+    limparCacheUtm();
 });
 
 afterAll(async () => {

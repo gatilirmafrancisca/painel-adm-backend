@@ -1,6 +1,8 @@
 import { ITransferencia } from "../models/Transferencia.js";
 import * as FinanceTypes from "../types/transferencias.types.js";
 import { MissingParamsError, InvalidEnumError } from "./errors.js";
+import { codigoUtmValido, codigosUtm } from "../services/utm.service.js";
+import { CAMPANHA_RIFA, type UtmCategoria } from "../types/utm.types.js";
 import { Types } from "mongoose";
 
 const hasOwnField = (obj: Record<string, any>, key: string): boolean => Object.prototype.hasOwnProperty.call(obj, key);
@@ -104,7 +106,15 @@ export const normalizarDadosTransferencia = (data: Partial<ITransferencia> & Rec
 
 export const CATEGORIA_DOACAO = "DOACAO";
 
-export const montarFiltrosTransferencia = (query: any): Record<string, any> => {
+const UTM_CAMPOS = [
+    ["utmSource", "SOURCE"],
+    ["utmMedium", "MEDIUM"],
+    ["utmCampaign", "CAMPAIGN"],
+] as const satisfies readonly (readonly [string, UtmCategoria])[];
+
+const ROTULO_UTM = { utmSource: "UtmSource", utmMedium: "UtmMedium", utmCampaign: "UtmCampaign" } as const;
+
+export const montarFiltrosTransferencia = async (query: any): Promise<Record<string, any>> => {
     const filters: Record<string, any> = {};
 
     if (!query) return filters;
@@ -121,16 +131,13 @@ export const montarFiltrosTransferencia = (query: any): Record<string, any> => {
         filters.metodoPagamento = query.metodoPagamento;
     }
 
-    if (query.utmSource && FinanceTypes.UTMSOURCETYPE.includes(query.utmSource as FinanceTypes.UtmSourceType)) {
-        filters.utmSource = query.utmSource;
-    }
-
-    if (query.utmMedium && FinanceTypes.UTMEDIUMTYPE.includes(query.utmMedium as FinanceTypes.UtmMediumType)) {
-        filters.utmMedium = query.utmMedium;
-    }
-
-    if (query.utmCampaign && FinanceTypes.UTCAMPAIGNTYPE.includes(query.utmCampaign as FinanceTypes.UtmCampaignType)) {
-        filters.utmCampaign = query.utmCampaign;
+    // Filtro por UTM: vale qualquer tag cadastrada, ativa ou não (as inativas
+    // continuam no histórico). Valor desconhecido é ignorado, como antes.
+    for (const [campo, categoria] of UTM_CAMPOS) {
+        const valor = query[campo];
+        if (typeof valor === "string" && valor && await codigoUtmValido(categoria, valor, { incluirInativas: true })) {
+            filters[campo] = valor;
+        }
     }
 
     if (query.nomeDoador) {
@@ -146,7 +153,7 @@ export const montarFiltrosTransferencia = (query: any): Record<string, any> => {
     // Sobrescreve 'tipo' e 'utmCampaign' para nunca misturar outros valores no resultado.
     if (query.categoria === CATEGORIA_DOACAO) {
         filters.tipo = "ENTRADA" satisfies FinanceTypes.TipoMovimentacaoType;
-        filters.utmCampaign = { $ne: "RIFA_SOLIDARIA" satisfies FinanceTypes.UtmCampaignType };
+        filters.utmCampaign = { $ne: CAMPANHA_RIFA };
     }
 
     // Filtro por mês (ex: ?mes=10&ano=2026), no fuso de Brasília (UTC-3, sem horário de verão)
@@ -164,7 +171,12 @@ export const montarFiltrosTransferencia = (query: any): Record<string, any> => {
     return filters;
 };
 
-export const validarParametros = async (data: ITransferencia): Promise<any> => {
+export interface OpcoesValidacao {
+    /** Sincronização do Mercado Pago: UTM desconhecida ou inativa não impede o registro. */
+    tolerarUtmDesconhecida?: boolean;
+}
+
+export const validarParametros = async (data: ITransferencia, opcoes: OpcoesValidacao = {}): Promise<any> => {
     const camposAusentes: string[] = [];
 
     // Validação de presença obrigatória
@@ -187,14 +199,27 @@ export const validarParametros = async (data: ITransferencia): Promise<any> => {
     validateEnumField(data.tipo, "Tipo", FinanceTypes.TIPOMOVIMENTACAOTYPE);
     validateEnumField(data.metodoPagamento, "Método de Pagamento", FinanceTypes.METODOPAGAMENTOTYPE);
     validateEnumField(data.status, "Status", FinanceTypes.STATUSFINANCEIROTYPE);
-    if (!isEmptyValue(data.utmSource)) {
-        validateEnumField(data.utmSource, "UtmSource", FinanceTypes.UTMSOURCETYPE);
-    }
-    if (!isEmptyValue(data.utmMedium)) {
-        validateEnumField(data.utmMedium, "UtmMedium", FinanceTypes.UTMEDIUMTYPE);
-    }
-    if (!isEmptyValue(data.utmCampaign)) {
-        validateEnumField(data.utmCampaign, "UtmCampaign", FinanceTypes.UTCAMPAIGNTYPE);
+    for (const [campo, categoria] of UTM_CAMPOS) {
+        const valor = data[campo];
+        if (isEmptyValue(valor)) continue;
+        const codigo = validateStringField(valor, ROTULO_UTM[campo]);
+
+        // Só tags ativas, no cadastro manual. Na sincronização do Mercado
+        // Pago o pagamento já aconteceu (o Pix fica até 30 min pendente, o
+        // checkout do cartão fica aberto): se a tag foi desativada ou
+        // excluída nesse meio-tempo, a entrada é registrada mesmo assim, com
+        // a UTM que veio, em vez de o dinheiro sumir do financeiro.
+        if (await codigoUtmValido(categoria, codigo, { incluirInativas: opcoes.tolerarUtmDesconhecida })) continue;
+
+        if (opcoes.tolerarUtmDesconhecida) {
+            console.warn(`[financeiro] ${ROTULO_UTM[campo]} '${codigo}' não está cadastrada; registrada mesmo assim.`, {
+                mercadoPagoId: data.mercadoPagoId ?? "N/A",
+            });
+            continue;
+        }
+
+        const permitidos = await codigosUtm(categoria);
+        throw new InvalidEnumError(`${ROTULO_UTM[campo]} inválido '${codigo}'. Valores permitidos: ${permitidos.join(", ")}.`);
     }
 
     // Validações opcionais (apenas se preenchidos)

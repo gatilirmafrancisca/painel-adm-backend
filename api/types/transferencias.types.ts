@@ -7,11 +7,8 @@ export type MetodoPagamentoType = typeof METODOPAGAMENTOTYPE[number];
 export const STATUSFINANCEIROTYPE = ['PENDENTE', 'APROVADO', 'CANCELADO'] as const;
 export type StatusFinanceiroType = typeof STATUSFINANCEIROTYPE[number];
 
-export const UTMSOURCETYPE = ['LANDING_PAGE', 'INSTAGRAM', 'FACEBOOK', 'FEIRA_ADOCAO'] as const;
-export type UtmSourceType = typeof UTMSOURCETYPE[number];
-
-export const UTMEDIUMTYPE = ['ORGANICO', 'PAGO'] as const;
-export type UtmMediumType = typeof UTMEDIUMTYPE[number];
-
-export const UTCAMPAIGNTYPE = ['CAMPANHA_ESPECIFICA', 'RIFA_SOLIDARIA'] as const;
-export type UtmCampaignType = typeof UTCAMPAIGNTYPE[number];
+// As tags de UTM não são mais fixas no código: ficam na coleção `utmtags`
+// (ver api/types/utm.types.ts e a seção "UTM" do painel).
+export type UtmSourceType = string;
+export type UtmMediumType = string;
+export type UtmCampaignType = string;
