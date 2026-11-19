@@ -30,9 +30,11 @@ const TransferenciaSchema: Schema<ITransferencia> = new mongoose.Schema({
     metodoPagamento : { type: String, enum: FinanceTypes.METODOPAGAMENTOTYPE, required: true},
     status: { type: String, enum: FinanceTypes.STATUSFINANCEIROTYPE, required: true },
 
-    utmSource: { type: String, enum: FinanceTypes.UTMSOURCETYPE, required: false },
-    utmMedium: { type: String, enum: FinanceTypes.UTMEDIUMTYPE, required: false },
-    utmCampaign: { type: String, enum: FinanceTypes.UTCAMPAIGNTYPE, required: false },
+    // Sem enum: as tags válidas ficam na coleção `utmtags` e são conferidas
+    // na aplicação (utils/financeirovalidar.ts).
+    utmSource: { type: String, required: false },
+    utmMedium: { type: String, required: false },
+    utmCampaign: { type: String, required: false },
 
     // Vínculo opcional com um gato do abrigo
     gatoId: { type: Schema.Types.ObjectId, ref: 'Gato', required: false },

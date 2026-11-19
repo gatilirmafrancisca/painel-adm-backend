@@ -2,7 +2,7 @@ import Transferencia, {ITransferencia} from "../models/Transferencia.js"
 import ResponseType from "../types/response.type.js";
 import { Types, Document } from "mongoose";
 import { Request } from "express";
-import { normalizarDadosTransferencia, validarParametros, montarFiltrosTransferencia, validatePatchParams } from "../utils/financeirovalidar.js";
+import { normalizarDadosTransferencia, validarParametros, montarFiltrosTransferencia, validatePatchParams, type OpcoesValidacao } from "../utils/financeirovalidar.js";
 import Gato from "../models/Gato.js";
 
 const localizarTransferencia = async(id?: string, filters: any = {}) : Promise<(ITransferencia & Document)[]> => {
@@ -20,12 +20,12 @@ const localizarTransferencia = async(id?: string, filters: any = {}) : Promise<(
 
 }
 
-export const criarTransferenciaService = async (data: ITransferencia, req: Request) : Promise<ResponseType> => {
+export const criarTransferenciaService = async (data: ITransferencia, req: Request, opcoes: OpcoesValidacao = {}) : Promise<ResponseType> => {
 
     try {
 
         const dadosNormalizados = normalizarDadosTransferencia(data);
-        await validarParametros(dadosNormalizados as ITransferencia);
+        await validarParametros(dadosNormalizados as ITransferencia, opcoes);
 
         const mercadoPagoId = dadosNormalizados.mercadoPagoId;
         const transferenciaExistente = mercadoPagoId
@@ -75,7 +75,7 @@ export const listarTransferenciaService = async (req: any) : Promise<ResponseTyp
     try {
     
         const { query } = req;
-        const filters = montarFiltrosTransferencia(query);
+        const filters = await montarFiltrosTransferencia(query);
 
         // ?agregar=total devolve só a soma dos valores filtrados, sem a lista
         if (query?.agregar === "total") {

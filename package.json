@@ -14,7 +14,8 @@
     "tests": "vitest run",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "criar-admin": "tsx scripts/criarAdmin.ts"
+    "criar-admin": "tsx scripts/criarAdmin.ts",
+    "seed:utm": "tsx scripts/seedUtmTags.ts"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
